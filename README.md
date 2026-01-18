@@ -1,4 +1,5 @@
 🎋 Aero Gami
+
 Aero Gami is a minimalist, single-button "Gravity Switch" runner game inspired by traditional Japanese origami and Ukiyo-e woodblock prints. Navigate a paper crane through a tranquil zen village, switching between the earth and sky to find your harmony.
 
 🎮 Gameplay
