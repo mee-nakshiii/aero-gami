@@ -3,17 +3,17 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Aero Gami: Zen Journey</title>
+    <title>Aero Gami: Zen Pro</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
             display: flex; justify-content: center; align-items: center;
-            min-height: 100vh; background: #2c2925;
+            min-height: 100vh; background: #bcd4da;
             font-family: 'Courier New', monospace; overflow: hidden;
         }
         #gameContainer {
             position: relative; border: 4px solid #75a586;
-            box-shadow: 0 0 50px rgba(0, 0, 0, 0.5);
+            box-shadow: 0 0 50px rgba(0, 0, 0, 0.2);
             background: #f4f1ea;
         }
         canvas { display: block; }
@@ -23,8 +23,16 @@
             display: flex; justify-content: space-between; align-items: center;
         }
         #scoreBoard { color: #5492a3; font-size: 24px; font-weight: bold; text-shadow: 1px 1px #fff; }
-        #progressBar { width: 60%; height: 6px; background: rgba(0, 0, 0, 0.05); border-radius: 3px; overflow: hidden; }
+        #progressBar { width: 40%; height: 6px; background: rgba(0, 0, 0, 0.1); border-radius: 3px; overflow: hidden; }
         #progressFill { height: 100%; background: #5492a3; width: 0%; transition: width 0.1s linear; }
+        
+        /* Audio Control Button */
+        #audioControl {
+            pointer-events: all; background: #75a586; color: white;
+            border: none; padding: 5px 15px; border-radius: 20px;
+            cursor: pointer; font-size: 12px; font-weight: bold;
+        }
+
         .screen {
             position: absolute; top: 0; left: 0; width: 100%; height: 100%;
             background: rgba(244, 241, 234, 0.9); display: none;
@@ -33,7 +41,8 @@
         }
         .screen.active { display: flex; }
         h1 { font-weight: 300; letter-spacing: 8px; color: #5492a3; margin-bottom: 20px; }
-        button { padding: 12px 40px; background: #75a586; border: none; color: white; cursor: pointer; border-radius: 4px; font-weight: bold; }
+        button { padding: 12px 40px; background: #75a586; border: none; color: white; cursor: pointer; border-radius: 4px; font-weight: bold; transition: 0.2s; }
+        button:hover { background: #5492a3; transform: scale(1.05); }
     </style>
 </head>
 <body>
@@ -42,18 +51,26 @@
         <div id="ui">
             <div id="scoreBoard">ZEN: 0</div>
             <div id="progressBar"><div id="progressFill"></div></div>
+            <button id="audioControl" onclick="game.toggleMute()">SOUND: ON</button>
         </div>
         
         <div id="startScreen" class="screen active">
             <h1>AERO GAMI</h1>
-            <p style="color: #75a586; margin-bottom: 20px;">TAP OR SPACE TO FOLD</p>
+            <p style="color: #75a586; margin-bottom: 20px;">[SPACE] TO ENTER THE VILLAGE</p>
             <button onclick="game.start()">ENTER THE VILLAGE</button>
         </div>
 
         <div id="gameOverScreen" class="screen">
-            <h1>HARMONY LOST</h1>
-            <p id="finalScore" style="margin-bottom: 20px;"></p>
-            <button onclick="location.reload()">RE-CENTER</button>
+            <h1 style="color: #d32f2f;">HARMONY INTERRUPTED</h1>
+            <p id="finalScore" style="margin-bottom: 10px; color: #3e2723;"></p>
+            <p id="highScore" style="margin-bottom: 20px; color: #5492a3; font-weight: bold;"></p>
+            <button onclick="location.reload()">FIND YOUR CENTER</button>
+        </div>
+
+        <div id="winScreen" class="screen">
+            <h1 style="color: #75a586;">HARMONY ACHIEVED</h1>
+            <p style="margin-bottom: 20px;">You have mastered the Zen winds.</p>
+            <button onclick="location.reload()">FLY AGAIN</button>
         </div>
     </div>
 
@@ -62,86 +79,87 @@ class Background {
     constructor(canvas) {
         this.canvas = canvas;
         this.mountX = 0;
-        this.cloudX = 0;
+        this.petals = Array.from({ length: 18 }, () => ({
+            x: Math.random() * canvas.width,
+            y: Math.random() * canvas.height,
+            size: 2 + Math.random() * 4,
+            vX: 0.5 + Math.random(),
+            vY: 0.2 + Math.random(),
+            a: Math.random() * Math.PI * 2
+        }));
     }
 
-    draw(ctx, speed) {
-        // Painterly Sky Gradient
+    draw(ctx, speed, timeProgress) {
+        let skyColor = "#bcd4da"; 
+        let horizonColor = "#f4f1ea";
+        if (timeProgress > 0.5) {
+            let p = (timeProgress - 0.5) * 2;
+            skyColor = this.lerpColor("#bcd4da", "#ffb347", p); 
+            horizonColor = this.lerpColor("#f4f1ea", "#ffcc33", p);
+        }
         let sky = ctx.createLinearGradient(0, 0, 0, this.canvas.height);
-        sky.addColorStop(0, "#bcd4da"); // Zen Blue
-        sky.addColorStop(0.5, "#bcd4da");
-        sky.addColorStop(1, "#f4f1ea"); // Parchment
+        sky.addColorStop(0, skyColor); 
+        sky.addColorStop(1, horizonColor);
         ctx.fillStyle = sky;
         ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
 
-        // Parallax Mountains (Hand-drawn look)
-        this.mountX -= speed * 0.2;
+        this.mountX -= speed * 0.15;
         if (this.mountX < -1000) this.mountX = 0;
-        
-        ctx.fillStyle = "#9bc4a9"; // Tranquil Green
+        ctx.fillStyle = "rgba(155, 196, 169, 0.5)"; 
         for(let i=0; i<3; i++) {
             let x = this.mountX + (i * 1000);
             ctx.beginPath();
-            ctx.moveTo(x - 200, 500);
-            ctx.quadraticCurveTo(x + 200, 100, x + 600, 500); // Curved peaks
+            ctx.moveTo(x - 300, 500);
+            ctx.quadraticCurveTo(x + 200, 100, x + 700, 500);
             ctx.fill();
-            // Snow Cap
-            ctx.fillStyle = "rgba(255,255,255,0.7)";
-            ctx.beginPath();
-            ctx.moveTo(x + 100, 250);
-            ctx.quadraticCurveTo(x + 200, 100, x + 300, 250);
-            ctx.fill();
-            ctx.fillStyle = "#9bc4a9";
         }
+
+        ctx.fillStyle = "#f8bbd0";
+        this.petals.forEach(p => {
+            p.x -= (p.vX + speed * 0.12); p.y += p.vY; p.a += 0.02;
+            if (p.x < -10) p.x = this.canvas.width + 10;
+            if (p.y > this.canvas.height) p.y = -10;
+            ctx.save(); ctx.translate(p.x, p.y); ctx.rotate(p.a);
+            ctx.beginPath(); ctx.ellipse(0, 0, p.size, p.size / 2, 0, 0, Math.PI * 2); ctx.fill();
+            ctx.restore();
+        });
+    }
+
+    lerpColor(a, b, amount) {
+        let ah = parseInt(a.replace(/#/g, ''), 16),
+            ar = ah >> 16, ag = ah >> 8 & 0xff, ab = ah & 0xff,
+            bh = parseInt(b.replace(/#/g, ''), 16),
+            br = bh >> 16, bg = bh >> 8 & 0xff, bb = bh & 0xff,
+            rr = ar + amount * (br - ar), rg = ag + amount * (bg - ag), rb = ab + amount * (bb - ab);
+        return '#' + ((1 << 24) + (rr << 16) + (rg << 8) + rb | 0).toString(16).slice(1);
     }
 }
 
 class OrigamiCrane {
     constructor(canvas) {
         this.canvas = canvas;
-        this.x = 150;
-        this.y = canvas.height / 2;
-        this.gravity = 1;
-        this.targetY = canvas.height - 100;
+        this.x = 150; this.y = canvas.height / 2;
+        this.gravity = 1; this.targetY = canvas.height - 100;
         this.angle = 0;
     }
-
     toggle() {
         this.gravity *= -1;
         this.targetY = this.gravity === 1 ? this.canvas.height - 100 : 100;
     }
-
     update() {
-        this.y += (this.targetY - this.y) * 0.15;
+        this.y += (this.targetY - this.y) * 0.22;
         this.angle += 0.05;
     }
-
     draw(ctx) {
-        ctx.save();
-        ctx.translate(this.x, this.y + Math.sin(this.angle)*4);
+        ctx.save(); ctx.translate(this.x, this.y + Math.sin(this.angle)*5);
         if (this.gravity === -1) ctx.scale(1, -1);
-
-        // Classic Origami Crane Shape (Restored)
-        ctx.fillStyle = "white";
-        ctx.strokeStyle = "#5492a3";
-        ctx.lineWidth = 1.2;
+        ctx.fillStyle = "white"; ctx.strokeStyle = "#5492a3"; ctx.lineWidth = 1.2;
         ctx.beginPath();
-        ctx.moveTo(30, 0);    // Head
-        ctx.lineTo(12, -6);   // Neck
-        ctx.lineTo(-15, -28); // Wing Top
-        ctx.lineTo(-5, 0);    // Body
-        ctx.lineTo(-15, 28);  // Wing Bottom
-        ctx.lineTo(12, 6);    // Tail base
-        ctx.lineTo(28, 12);   // Tail tip
-        ctx.closePath();
-        ctx.fill();
-        ctx.stroke();
-
-        // Structural fold line
-        ctx.beginPath();
-        ctx.moveTo(12, 0); ctx.lineTo(-5, 0);
-        ctx.stroke();
-        
+        ctx.moveTo(35, 0); ctx.lineTo(15, -10); ctx.lineTo(-20, -35);
+        ctx.lineTo(-5, 0); ctx.lineTo(-20, 35); ctx.lineTo(15, 10);
+        ctx.lineTo(30, 15); ctx.closePath();
+        ctx.fill(); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(15, 0); ctx.lineTo(-5, 0); ctx.stroke();
         ctx.restore();
     }
 }
@@ -154,30 +172,15 @@ class Obstacle {
         this.type = Math.random() > 0.5 ? 'lantern' : 'bonsai';
         this.passed = false;
     }
-
     draw(ctx) {
-        ctx.save();
-        ctx.translate(this.x, this.y);
-        if (this.type === 'lantern') {
-            // Painted Lantern
-            ctx.fillStyle = "#d32f2f"; // Warm Red
-            ctx.beginPath();
-            ctx.roundRect(-15, -20, 30, 40, 8);
-            ctx.fill();
-            ctx.fillStyle = "rgba(255, 255, 100, 0.4)"; // Inner glow
-            ctx.beginPath();
-            ctx.arc(0, 0, 10, 0, Math.PI * 2);
-            ctx.fill();
-        } else {
-            // Drawn Bonsai
-            ctx.fillStyle = "#3e2723";
-            ctx.fillRect(-3, 0, 6, 20); // Trunk
+        ctx.save(); ctx.translate(this.x, this.y);
+        if (this.type === 'bonsai') {
+            ctx.fillStyle = "#3e2723"; ctx.fillRect(-3, 0, 6, 20);
             ctx.fillStyle = "#75a586";
-            for(let i=0; i<6; i++) {
-                ctx.beginPath();
-                ctx.arc((i-2.5)*7, -12, 12, 0, Math.PI*2);
-                ctx.fill();
-            }
+            for(let i=0; i<4; i++) { ctx.beginPath(); ctx.arc((i-1.5)*10, -15, 15, 0, Math.PI*2); ctx.fill(); }
+        } else {
+            ctx.fillStyle = "#d32f2f"; ctx.beginPath(); ctx.roundRect(-15, -20, 30, 40, 8); ctx.fill();
+            ctx.fillStyle = "rgba(255, 255, 255, 0.4)"; ctx.beginPath(); ctx.arc(0, 0, 12, 0, Math.PI*2); ctx.fill();
         }
         ctx.restore();
     }
@@ -189,91 +192,132 @@ class GameManager {
         this.ctx = this.canvas.getContext('2d');
         this.canvas.width = 1000; this.canvas.height = 500;
         
+        // Audio Setup
+        this.swishSfx = new Audio('fahhhhh.mp3'); 
+        this.swishSfx.muted = false;
+        
         this.bg = new Background(this.canvas);
         this.crane = new OrigamiCrane(this.canvas);
         this.obstacles = [];
-        this.score = 0;
-        this.speed = 6.5; // Faster initial speed
-        this.timer = 0;
-        this.duration = 180; 
+        this.score = 0; 
+        this.speed = 8.5;
+        this.timer = 0; 
+        this.duration = 120;
         this.active = false;
-
+        this.spawnCooldown = 0; 
         this.setupInput();
-        this.drawSplash();
     }
 
     setupInput() {
-        const flip = () => { if(this.active) this.crane.toggle(); };
-        window.addEventListener('keydown', (e) => { if(e.code === 'Space') { e.preventDefault(); flip(); } });
-        this.canvas.addEventListener('mousedown', flip);
-    }
+        const triggerAction = (e) => {
+            const activeScreen = document.querySelector('.screen.active');
+            
+            // 1. If we are on a menu screen, button click logic
+            if (activeScreen) {
+                if (e && e.code === 'Space') {
+                    e.preventDefault();
+                    activeScreen.querySelector('button').click();
+                }
+            } 
+            // 2. If the game is running, flip and play sound
+            else if (this.active) {
+                if (e && e.code === 'Space') e.preventDefault();
+                this.crane.toggle();
+                this.playSwish(); // Sound triggers on your command
+            }
+        };
 
-    start() {
-        document.getElementById('startScreen').classList.remove('active');
-        this.active = true;
-        this.loop();
+        window.addEventListener('keydown', (e) => {
+            if (e.code === 'Space') triggerAction(e);
+        });
+
+        this.canvas.addEventListener('mousedown', () => triggerAction(null));
     }
 
     update() {
         this.timer += 1/60;
-        this.speed += 0.0008; // Faster acceleration
+        this.speed += 0.005;
         this.crane.update();
 
-        // Spawn logic
-        if (Math.random() < 0.02) this.obstacles.push(new Obstacle(this.canvas));
+        if (this.timer >= this.duration) {
+            this.win();
+            return;
+        }
+
+        this.spawnCooldown--;
+        if (this.spawnCooldown <= 0 && Math.random() < 0.045) {
+            this.obstacles.push(new Obstacle(this.canvas));
+            this.spawnCooldown = 32;
+        }
 
         this.obstacles.forEach((obs, i) => {
             obs.x -= this.speed;
             
-            // Score handling
+            // Sound call removed from here so it only triggers on Space/Click
             if (!obs.passed && obs.x < this.crane.x) {
                 obs.passed = true;
                 this.score += 50;
                 document.getElementById('scoreBoard').innerText = "ZEN: " + this.score;
             }
 
-            // Hit detection
-            let dx = this.crane.x - obs.x;
-            let dy = this.crane.y - obs.y;
+            let dx = this.crane.x - obs.x, dy = this.crane.y - obs.y;
             if (Math.sqrt(dx*dx + dy*dy) < 35) this.gameOver();
-
             if (obs.x < -100) this.obstacles.splice(i, 1);
         });
-
         document.getElementById('progressFill').style.width = (this.timer / this.duration * 100) + "%";
     }
-
-    drawSplash() {
-        this.bg.draw(this.ctx, 0);
-        this.crane.draw(this.ctx);
+    toggleMute() {
+        this.swishSfx.muted = !this.swishSfx.muted;
+        document.getElementById('audioControl').innerText = `SOUND: ${this.swishSfx.muted ? 'OFF' : 'ON'}`;
     }
 
-    draw() {
-        this.bg.draw(this.ctx, this.speed);
+    playSwish() {
+        if (this.swishSfx.muted) return;
+        this.swishSfx.currentTime = 2.42; // Start at 0.19s
+        this.swishSfx.play().catch(e => console.log("Sound error:", e));
         
-        // Softened Rails (Ink Wash style)
-        this.ctx.fillStyle = "rgba(84, 146, 163, 0.2)";
-        this.ctx.fillRect(0, 95, 1000, 6);
-        this.ctx.fillRect(0, 395, 1000, 6);
+        // Play until 0.39s (Duration of 200ms)
+        setTimeout(() => { 
+            this.swishSfx.pause(); 
+        }, 1500); 
+    }
 
+    start() {
+        document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+        this.active = true;
+        this.loop();
+    }
+
+    
+
+    draw() {
+        this.bg.draw(this.ctx, this.speed, this.timer / this.duration);
+        this.ctx.fillStyle = "rgba(84, 146, 163, 0.2)";
+        this.ctx.fillRect(0, 95, 1000, 5); this.ctx.fillRect(0, 395, 1000, 5);
         this.crane.draw(this.ctx);
         this.obstacles.forEach(obs => obs.draw(this.ctx));
     }
 
     loop() {
         if (!this.active) return;
-        this.update();
-        this.draw();
+        this.update(); this.draw();
         requestAnimationFrame(() => this.loop());
     }
 
     gameOver() {
         this.active = false;
+        let savedHigh = localStorage.getItem('zenHighScore') || 0;
+        if(this.score > savedHigh) { localStorage.setItem('zenHighScore', this.score); savedHigh = this.score; }
         document.getElementById('gameOverScreen').classList.add('active');
-        document.getElementById('finalScore').innerText = "FINAL ZEN SCORE: " + this.score;
+        document.getElementById('finalScore').innerText = "CURRENT FOCUS: " + this.score;
+        document.getElementById('highScore').innerText = "PEAK HARMONY TO BEAT: " + savedHigh;
+    }
+
+    win() {
+        this.active = false;
+        document.getElementById('winScreen').classList.add('active');
     }
 }
-
 const game = new GameManager();
 </script>
 </body>
