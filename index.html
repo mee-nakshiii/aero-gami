@@ -287,7 +287,25 @@ class GameManager {
         this.active = true;
         this.loop();
     }
-
+    createZenMist() {
+    for(let i = 0; i < 5; i++) {
+        this.obstacles.push({
+            x: this.crane.x,
+            y: this.crane.y,
+            isMist: true,
+            size: 5 + Math.random() * 10,
+            opacity: 0.6,
+            draw: function(ctx) {
+                ctx.fillStyle = `rgba(255, 255, 255, ${this.opacity})`;
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+                ctx.fill();
+                this.x -= 2; // Drifts backward
+                this.opacity -= 0.02; // Fades out
+            }
+        });
+    }
+}
     
 
     draw() {
