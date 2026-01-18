@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Aero Gami: Zen Journey</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            display: flex; justify-content: center; align-items: center;
+            min-height: 100vh; background: #2c2925;
+            font-family: 'Courier New', monospace; overflow: hidden;
+        }
+        #gameContainer {
+            position: relative; border: 4px solid #75a586;
+            box-shadow: 0 0 50px rgba(0, 0, 0, 0.5);
+            background: #f4f1ea;
+        }
+        canvas { display: block; }
+        #ui {
+            position: absolute; top: 0; left: 0; width: 100%;
+            padding: 25px; pointer-events: none; z-index: 20;
+            display: flex; justify-content: space-between; align-items: center;
+        }
+        #scoreBoard { color: #5492a3; font-size: 24px; font-weight: bold; text-shadow: 1px 1px #fff; }
+        #progressBar { width: 60%; height: 6px; background: rgba(0, 0, 0, 0.05); border-radius: 3px; overflow: hidden; }
+        #progressFill { height: 100%; background: #5492a3; width: 0%; transition: width 0.1s linear; }
+        .screen {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(244, 241, 234, 0.9); display: none;
+            flex-direction: column; justify-content: center; align-items: center;
+            pointer-events: all; text-align: center; z-index: 30;
+        }
+        .screen.active { display: flex; }
+        h1 { font-weight: 300; letter-spacing: 8px; color: #5492a3; margin-bottom: 20px; }
+        button { padding: 12px 40px; background: #75a586; border: none; color: white; cursor: pointer; border-radius: 4px; font-weight: bold; }
+    </style>
+</head>
+<body>
+    <div id="gameContainer">
+        <canvas id="gameCanvas"></canvas>
+        <div id="ui">
+            <div id="scoreBoard">ZEN: 0</div>
+            <div id="progressBar"><div id="progressFill"></div></div>
+        </div>
+        
+        <div id="startScreen" class="screen active">
+            <h1>AERO GAMI</h1>
+            <p style="color: #75a586; margin-bottom: 20px;">TAP OR SPACE TO FOLD</p>
+            <button onclick="game.start()">ENTER THE VILLAGE</button>
+        </div>
+
+        <div id="gameOverScreen" class="screen">
+            <h1>HARMONY LOST</h1>
+            <p id="finalScore" style="margin-bottom: 20px;"></p>
+            <button onclick="location.reload()">RE-CENTER</button>
+        </div>
+    </div>
+
+<script>
+class Background {
+    constructor(canvas) {
+        this.canvas = canvas;
+        this.mountX = 0;
+        this.cloudX = 0;
+    }
+
+    draw(ctx, speed) {
+        // Painterly Sky Gradient
+        let sky = ctx.createLinearGradient(0, 0, 0, this.canvas.height);
+        sky.addColorStop(0, "#bcd4da"); // Zen Blue
+        sky.addColorStop(0.5, "#bcd4da");
+        sky.addColorStop(1, "#f4f1ea"); // Parchment
+        ctx.fillStyle = sky;
+        ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+
+        // Parallax Mountains (Hand-drawn look)
+        this.mountX -= speed * 0.2;
+        if (this.mountX < -1000) this.mountX = 0;
+        
+        ctx.fillStyle = "#9bc4a9"; // Tranquil Green
+        for(let i=0; i<3; i++) {
+            let x = this.mountX + (i * 1000);
+            ctx.beginPath();
+            ctx.moveTo(x - 200, 500);
+            ctx.quadraticCurveTo(x + 200, 100, x + 600, 500); // Curved peaks
+            ctx.fill();
+            // Snow Cap
+            ctx.fillStyle = "rgba(255,255,255,0.7)";
+            ctx.beginPath();
+            ctx.moveTo(x + 100, 250);
+            ctx.quadraticCurveTo(x + 200, 100, x + 300, 250);
+            ctx.fill();
+            ctx.fillStyle = "#9bc4a9";
+        }
+    }
+}
+
+class OrigamiCrane {
+    constructor(canvas) {
+        this.canvas = canvas;
+        this.x = 150;
+        this.y = canvas.height / 2;
+        this.gravity = 1;
+        this.targetY = canvas.height - 100;
+        this.angle = 0;
+    }
+
+    toggle() {
+        this.gravity *= -1;
+        this.targetY = this.gravity === 1 ? this.canvas.height - 100 : 100;
+    }
+
+    update() {
+        this.y += (this.targetY - this.y) * 0.15;
+        this.angle += 0.05;
+    }
+
+    draw(ctx) {
+        ctx.save();
+        ctx.translate(this.x, this.y + Math.sin(this.angle)*4);
+        if (this.gravity === -1) ctx.scale(1, -1);
+
+        // Classic Origami Crane Shape (Restored)
+        ctx.fillStyle = "white";
+        ctx.strokeStyle = "#5492a3";
+        ctx.lineWidth = 1.2;
+        ctx.beginPath();
+        ctx.moveTo(30, 0);    // Head
+        ctx.lineTo(12, -6);   // Neck
+        ctx.lineTo(-15, -28); // Wing Top
+        ctx.lineTo(-5, 0);    // Body
+        ctx.lineTo(-15, 28);  // Wing Bottom
+        ctx.lineTo(12, 6);    // Tail base
+        ctx.lineTo(28, 12);   // Tail tip
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+
+        // Structural fold line
+        ctx.beginPath();
+        ctx.moveTo(12, 0); ctx.lineTo(-5, 0);
+        ctx.stroke();
+        
+        ctx.restore();
+    }
+}
+
+class Obstacle {
+    constructor(canvas) {
+        this.x = canvas.width + 100;
+        this.isTop = Math.random() > 0.5;
+        this.y = this.isTop ? 100 : canvas.height - 100;
+        this.type = Math.random() > 0.5 ? 'lantern' : 'bonsai';
+        this.passed = false;
+    }
+
+    draw(ctx) {
+        ctx.save();
+        ctx.translate(this.x, this.y);
+        if (this.type === 'lantern') {
+            // Painted Lantern
+            ctx.fillStyle = "#d32f2f"; // Warm Red
+            ctx.beginPath();
+            ctx.roundRect(-15, -20, 30, 40, 8);
+            ctx.fill();
+            ctx.fillStyle = "rgba(255, 255, 100, 0.4)"; // Inner glow
+            ctx.beginPath();
+            ctx.arc(0, 0, 10, 0, Math.PI * 2);
+            ctx.fill();
+        } else {
+            // Drawn Bonsai
+            ctx.fillStyle = "#3e2723";
+            ctx.fillRect(-3, 0, 6, 20); // Trunk
+            ctx.fillStyle = "#75a586";
+            for(let i=0; i<6; i++) {
+                ctx.beginPath();
+                ctx.arc((i-2.5)*7, -12, 12, 0, Math.PI*2);
+                ctx.fill();
+            }
+        }
+        ctx.restore();
+    }
+}
+
+class GameManager {
+    constructor() {
+        this.canvas = document.getElementById('gameCanvas');
+        this.ctx = this.canvas.getContext('2d');
+        this.canvas.width = 1000; this.canvas.height = 500;
+        
+        this.bg = new Background(this.canvas);
+        this.crane = new OrigamiCrane(this.canvas);
+        this.obstacles = [];
+        this.score = 0;
+        this.speed = 6.5; // Faster initial speed
+        this.timer = 0;
+        this.duration = 180; 
+        this.active = false;
+
+        this.setupInput();
+        this.drawSplash();
+    }
+
+    setupInput() {
+        const flip = () => { if(this.active) this.crane.toggle(); };
+        window.addEventListener('keydown', (e) => { if(e.code === 'Space') { e.preventDefault(); flip(); } });
+        this.canvas.addEventListener('mousedown', flip);
+    }
+
+    start() {
+        document.getElementById('startScreen').classList.remove('active');
+        this.active = true;
+        this.loop();
+    }
+
+    update() {
+        this.timer += 1/60;
+        this.speed += 0.0008; // Faster acceleration
+        this.crane.update();
+
+        // Spawn logic
+        if (Math.random() < 0.02) this.obstacles.push(new Obstacle(this.canvas));
+
+        this.obstacles.forEach((obs, i) => {
+            obs.x -= this.speed;
+            
+            // Score handling
+            if (!obs.passed && obs.x < this.crane.x) {
+                obs.passed = true;
+                this.score += 50;
+                document.getElementById('scoreBoard').innerText = "ZEN: " + this.score;
+            }
+
+            // Hit detection
+            let dx = this.crane.x - obs.x;
+            let dy = this.crane.y - obs.y;
+            if (Math.sqrt(dx*dx + dy*dy) < 35) this.gameOver();
+
+            if (obs.x < -100) this.obstacles.splice(i, 1);
+        });
+
+        document.getElementById('progressFill').style.width = (this.timer / this.duration * 100) + "%";
+    }
+
+    drawSplash() {
+        this.bg.draw(this.ctx, 0);
+        this.crane.draw(this.ctx);
+    }
+
+    draw() {
+        this.bg.draw(this.ctx, this.speed);
+        
+        // Softened Rails (Ink Wash style)
+        this.ctx.fillStyle = "rgba(84, 146, 163, 0.2)";
+        this.ctx.fillRect(0, 95, 1000, 6);
+        this.ctx.fillRect(0, 395, 1000, 6);
+
+        this.crane.draw(this.ctx);
+        this.obstacles.forEach(obs => obs.draw(this.ctx));
+    }
+
+    loop() {
+        if (!this.active) return;
+        this.update();
+        this.draw();
+        requestAnimationFrame(() => this.loop());
+    }
+
+    gameOver() {
+        this.active = false;
+        document.getElementById('gameOverScreen').classList.add('active');
+        document.getElementById('finalScore').innerText = "FINAL ZEN SCORE: " + this.score;
+    }
+}
+
+const game = new GameManager();
+</script>
+</body>
+</html>
